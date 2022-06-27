@@ -2,7 +2,7 @@ package com.freja.cardapplet;
 
 //import javaCardKeyHolder.*;
 import javacard.framework.*;
-import javacard.security.KeyBuilder;
+import javacard.security.*;
 import javacardx.apdu.ExtendedLength;
 
 import java.nio.charset.StandardCharsets;
@@ -32,6 +32,8 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
     private final static byte[] HELLO_WORLD = "Hello world!".getBytes(StandardCharsets.UTF_8);
 
     public final static byte CMD_HELLO_WORLD = (byte) 0x41;
+
+    private KeyPair m_signingKeyPair;
 
     /**
      * Installs applet on card by creating unique instance of FrejaLoA4Applet.
@@ -76,6 +78,16 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
 
         m_tempBufferTransient = JCSystem.makeTransientByteArray((short) 256, JCSystem.CLEAR_ON_DESELECT);
         m_appletState = INITIAL_STATE;
+
+        generateRSAKeyPair();
+    }
+
+    /**
+     * Initializes RSA 2048 keypair.
+     */
+    private void generateRSAKeyPair(){
+        m_signingKeyPair = new KeyPair(KeyPair.ALG_RSA, KeyBuilder.LENGTH_RSA_2048);
+        m_signingKeyPair.genKeyPair();
     }
 
     /**
