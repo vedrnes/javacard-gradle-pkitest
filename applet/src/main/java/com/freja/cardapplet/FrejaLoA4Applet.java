@@ -80,6 +80,7 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
         m_appletState = INITIAL_STATE;
 
         generateRSAKeyPair();
+
     }
 
     /**
@@ -149,7 +150,8 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
         if (m_appletState == INITIAL_STATE) {
             switch (buffer[ISO7816.OFFSET_INS]) {
                 case CMD_HELLO_WORLD:
-                    helloWorld();
+                    //helloWorld();
+                    helloWorldSigned();
                     return;
                 default:
                     Error.throwError(Error.SW_GET_HELLO_WORLD_FAILED, Error.MSG_GET_HELLO_WORLD_FAILED);
@@ -192,6 +194,7 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
 
             // pack command for sending into buffer
             byte[] buffer = APDU.getCurrentAPDUBuffer();
+
             // puts list into tempBuffer
             Util.arrayCopy(HELLO_WORLD, (short) 0, buffer, (short) 0, (short)HELLO_WORLD.length);
             MyUtil.sendDataBuffer((short)HELLO_WORLD.length);
@@ -207,6 +210,29 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
         }
 
 
+    }
+
+    private void helloWorldSigned() {
+        try {
+
+            byte[] buffer = APDU.getCurrentAPDUBuffer();
+
+            // sign buffer with private key: unsure of the Signature.ALG_RSA_SHA_256_PKCS1 used.
+            Signature sig = Signature.getInstance(Signature.ALG_RSA_SHA_256_PKCS1, false);
+            sig.init(m_signingKeyPair.getPrivate(), Signature.MODE_SIGN);
+
+            PublicKey pub = m_signingKeyPair.getPublic();
+            PrivateKey priv = m_signingKeyPair.getPrivate();
+
+            short sigLength = sig.sign(HELLO_WORLD, (short) 0, (short)HELLO_WORLD.length, buffer, (short) 0);
+            MyUtil.sendDataBuffer(sigLength);
+        }
+        catch (Exception e) {
+
+            if (e instanceof ISOException) {
+                Error.throwError(((ISOException) e).getReason());
+            }
+        }
     }
 
 }
