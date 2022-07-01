@@ -221,12 +221,13 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
             Signature sig = Signature.getInstance(Signature.ALG_RSA_SHA_256_PKCS1, false);
             sig.init(m_signingKeyPair.getPrivate(), Signature.MODE_SIGN);
 
-            PublicKey pub = m_signingKeyPair.getPublic();
-            PrivateKey priv = m_signingKeyPair.getPrivate();
-
             short sigLength = sig.sign(HELLO_WORLD, (short) 0, (short)HELLO_WORLD.length, buffer, (short) 0);
+
+            sig.init(m_signingKeyPair.getPublic(), Signature.MODE_VERIFY);
+            boolean ver = sig.verify(HELLO_WORLD, (short) 0, (short)HELLO_WORLD.length, buffer, (short) 0, sigLength);
+            System.out.println(ver);
             MyUtil.sendDataBuffer(sigLength);
-        }
+            }
         catch (Exception e) {
 
             if (e instanceof ISOException) {
