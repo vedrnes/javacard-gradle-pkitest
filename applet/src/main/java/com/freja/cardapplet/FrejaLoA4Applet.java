@@ -151,7 +151,8 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
             switch (buffer[ISO7816.OFFSET_INS]) {
                 case CMD_HELLO_WORLD:
                     //helloWorld();
-                    helloWorldSigned();
+                    //helloWorldSigned();
+                    sendPublicKey();
                     return;
                 default:
                     Error.throwError(Error.SW_GET_HELLO_WORLD_FAILED, Error.MSG_GET_HELLO_WORLD_FAILED);
@@ -217,7 +218,7 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
 
             byte[] buffer = APDU.getCurrentAPDUBuffer();
 
-            // sign buffer with private key: unsure of the Signature.ALG_RSA_SHA_256_PKCS1 used.
+            // sign buffer with private key, Signature.ALG_RSA_SHA_256_PKCS1 used.
             Signature sig = Signature.getInstance(Signature.ALG_RSA_SHA_256_PKCS1, false);
             sig.init(m_signingKeyPair.getPrivate(), Signature.MODE_SIGN);
 
@@ -230,6 +231,22 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
             }
         catch (Exception e) {
 
+            if (e instanceof ISOException) {
+                Error.throwError(((ISOException) e).getReason());
+            }
+        }
+    }
+
+    private void sendPublicKey() {
+        try {
+            byte[] buffer = APDU.getCurrentAPDUBuffer();
+
+            RSAPublicKey pub = (RSAPublicKey) m_signingKeyPair.getPublic();
+            short lenExp = pub.getExponent(buffer, (short) 0);
+            short lenMod = pub.getModulus(buffer, lenExp);
+            MyUtil.sendDataBuffer((short) 258);
+
+        } catch (Exception e) {
             if (e instanceof ISOException) {
                 Error.throwError(((ISOException) e).getReason());
             }
