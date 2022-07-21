@@ -33,6 +33,10 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
 
     public final static byte CMD_HELLO_WORLD = (byte) 0x41;
 
+    public final static byte CMD_SEND_PUBLIC_KEY_EXP = (byte) 0x42;
+
+    public final static byte CMD_SEND_PUBLIC_KEY_MOD = (byte) 0x43;
+
     private KeyPair m_signingKeyPair;
 
     /**
@@ -150,9 +154,14 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
         if (m_appletState == INITIAL_STATE) {
             switch (buffer[ISO7816.OFFSET_INS]) {
                 case CMD_HELLO_WORLD:
-                    //helloWorld();
+                    helloWorld();
                     //helloWorldSigned();
-                    sendPublicKey();
+                    return;
+                case CMD_SEND_PUBLIC_KEY_EXP:
+                    sendPublicKeyExponent();
+                    return;
+                case CMD_SEND_PUBLIC_KEY_MOD:
+                    sendPublicKeyModulus();
                     return;
                 default:
                     Error.throwError(Error.SW_GET_HELLO_WORLD_FAILED, Error.MSG_GET_HELLO_WORLD_FAILED);
@@ -237,14 +246,28 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
         }
     }
 
-    private void sendPublicKey() {
+    private void sendPublicKeyExponent() {
         try {
             byte[] buffer = APDU.getCurrentAPDUBuffer();
 
             RSAPublicKey pub = (RSAPublicKey) m_signingKeyPair.getPublic();
             short lenExp = pub.getExponent(buffer, (short) 0);
-            short lenMod = pub.getModulus(buffer, lenExp);
-            MyUtil.sendDataBuffer((short) 258);
+            MyUtil.sendDataBuffer((short) lenExp);
+
+        } catch (Exception e) {
+            if (e instanceof ISOException) {
+                Error.throwError(((ISOException) e).getReason());
+            }
+        }
+    }
+
+    private void sendPublicKeyModulus() {
+        try {
+            byte[] buffer = APDU.getCurrentAPDUBuffer();
+
+            RSAPublicKey pub = (RSAPublicKey) m_signingKeyPair.getPublic();
+            short lenMod = pub.getModulus(buffer, (short) 0);
+            MyUtil.sendDataBuffer((short) lenMod);
 
         } catch (Exception e) {
             if (e instanceof ISOException) {
