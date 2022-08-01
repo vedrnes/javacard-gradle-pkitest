@@ -37,6 +37,10 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
 
     public final static byte CMD_SEND_PUBLIC_KEY_MOD = (byte) 0x43;
 
+    public final static byte CMD_SIGN = (byte) 0x44;
+
+    private byte[] m_tempBuffer = new byte[260];
+
     private KeyPair m_signingKeyPair;
 
     /**
@@ -158,10 +162,13 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
                     //helloWorldSigned();
                     return;
                 case CMD_SEND_PUBLIC_KEY_EXP:
-                    sendPublicKeyExponent();
+                    fetchPublicKeyExponent();
                     return;
                 case CMD_SEND_PUBLIC_KEY_MOD:
-                    sendPublicKeyModulus();
+                    fetchPublicKeyModulus();
+                    return;
+                case CMD_SIGN:
+                    signMessage();
                     return;
                 default:
                     Error.throwError(Error.SW_GET_HELLO_WORLD_FAILED, Error.MSG_GET_HELLO_WORLD_FAILED);
@@ -245,14 +252,16 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
             }
         }
     }
-
-    private void sendPublicKeyExponent() {
+    /**
+     * Fetch public 2048 RSA key exponent.
+     */
+    private void fetchPublicKeyExponent() {
         try {
             byte[] buffer = APDU.getCurrentAPDUBuffer();
 
             RSAPublicKey pub = (RSAPublicKey) m_signingKeyPair.getPublic();
             short lenExp = pub.getExponent(buffer, (short) 0);
-            MyUtil.sendDataBuffer((short) lenExp);
+            MyUtil.sendDataBuffer(lenExp);
 
         } catch (Exception e) {
             if (e instanceof ISOException) {
@@ -261,15 +270,58 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
         }
     }
 
-    private void sendPublicKeyModulus() {
+    /**
+     * Fetch public 2048 RSA key modulus.
+     */
+    private void fetchPublicKeyModulus() {
         try {
             byte[] buffer = APDU.getCurrentAPDUBuffer();
 
             RSAPublicKey pub = (RSAPublicKey) m_signingKeyPair.getPublic();
             short lenMod = pub.getModulus(buffer, (short) 0);
-            MyUtil.sendDataBuffer((short) lenMod);
+            MyUtil.sendDataBuffer(lenMod);
+
+            /*
+            Use apdu methods instead of MyUtil for test to use Extended Length.
+             */
+            //APDU apdu = APDU.getCurrentAPDU();
+            //apdu.setOutgoing();
+            //apdu.setOutgoingLength((short) 260);  //error APDUException.BAD_LENGTH occurs because Extended Length is not working.
+            //apdu.sendBytesLong(m_tempBuffer, (short) 0, (short) 260);
 
         } catch (Exception e) {
+            if (e instanceof ISOException) {
+                Error.throwError(((ISOException) e).getReason());
+            }
+            System.out.println("error message");
+            System.out.println(e.getMessage());
+            System.out.println(e.toString());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Sign bytes located in APDU buffer with private RSA 2048 key, RSA_SHA_256_PKCS1 algorithm used.
+     */
+    private void signMessage() {
+        try {
+            byte[] buffer = APDU.getCurrentAPDUBuffer();
+            Signature sig = Signature.getInstance(Signature.ALG_RSA_SHA_256_PKCS1, false);
+            sig.init(m_signingKeyPair.getPrivate(), Signature.MODE_SIGN);
+
+            short sigLength = sig.sign(buffer, buffer[ISO7816.OFFSET_CDATA], (short)HELLO_WORLD.length, buffer, (short) 0);
+
+            /*
+            Small check if sign was successful.
+             */
+            //Signature sig2 = Signature.getInstance(Signature.ALG_RSA_SHA_256_PKCS1, false);
+            //sig2.init(m_signingKeyPair.getPublic(), Signature.MODE_VERIFY);
+            //boolean ver = sig2.verify(HELLO_WORLD, (short) 0, (short)HELLO_WORLD.length, buffer, (short) 0, sigLength);
+
+            MyUtil.sendDataBuffer(sigLength);
+        }
+        catch (Exception e) {
+
             if (e instanceof ISOException) {
                 Error.throwError(((ISOException) e).getReason());
             }

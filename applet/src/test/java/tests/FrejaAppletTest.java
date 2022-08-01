@@ -1,15 +1,20 @@
 package tests;
 
 import cz.muni.fi.crocs.rcard.client.CardType;
-import javacard.security.KeyBuilder;
-import javacard.security.RSAPublicKey;
+
+import java.math.BigInteger;
+import java.security.KeyFactory;
+import java.security.PublicKey;
+import java.security.interfaces.RSAPublicKey;
+import java.security.spec.RSAPublicKeySpec;
+import java.security.Signature;
+import javacardx.apdu.ExtendedLength;
 import org.junit.Assert;
 import org.junit.jupiter.api.*;
 
 import javax.smartcardio.CommandAPDU;
 import javax.smartcardio.ResponseAPDU;
-import java.math.BigInteger;
-import java.security.spec.RSAPublicKeySpec;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Example test class for the applet
@@ -17,7 +22,7 @@ import java.security.spec.RSAPublicKeySpec;
  *
  * @author xsvenda, Dusan Klinec (ph4r05)
  */
-public class FrejaAppletTest extends FrejaBaseTest {
+public class FrejaAppletTest extends FrejaBaseTest implements ExtendedLength {
 
     public FrejaAppletTest() {
         // Change card type here if you want to use physical card
@@ -50,22 +55,51 @@ public class FrejaAppletTest extends FrejaBaseTest {
         Assert.assertNotNull(responseAPDU.getBytes());
     }
 
+    /**
+     * Fetch public key exponent and modulus, send message for signing and verify signature.
+     * @throws Exception
+     */
     @Test
-    public void publicKeySend() throws Exception {
-        final ResponseAPDU responseAPDU = connect().transmit(new CommandAPDU(0xB1, 0x42, 0,0));
-        final ResponseAPDU responseAPDU2 = connect().transmit(new CommandAPDU(0xB1, 0x43, 0,0));
+    public void verifySignatureTest() throws Exception {
+        final ResponseAPDU responseExp = connect().transmit(new CommandAPDU(0xB1, 0x42, 0,0));
+        final CommandAPDU fetchModulus = new CommandAPDU(0xB1, 0x43, 0,0);
+        final ResponseAPDU responseMod = connect().transmit(fetchModulus);
 
-        Assert.assertNotNull(responseAPDU);
-        Assert.assertEquals(0x9000, responseAPDU.getSW());
-        Assert.assertEquals(0x9000, responseAPDU2.getSW());
-        Assert.assertNotNull(responseAPDU.getBytes());
-        Assert.assertNotNull(responseAPDU2.getBytes());
+        /*
+        Try to write fetchModulus from scratch instead of using built in constructors of CommandADPU
+         */
+        //byte[] longData = {(byte) 0xB1, (byte) 0x43, (byte) 0x0, (byte) 0x0, (byte) 0x0, (byte) 0x1, (byte) 0x4};
+        //final CommandAPDU cmd = new CommandAPDU(longData);
 
-        byte[] exp = responseAPDU.getData();
-        byte[] mod = responseAPDU2.getData();
-        RSAPublicKey pub = (RSAPublicKey) KeyBuilder.buildKey(KeyBuilder.TYPE_RSA_PUBLIC, KeyBuilder.LENGTH_RSA_2048, false);
-        pub.setExponent(exp, (short) 0, (short) exp.length);
-        pub.setModulus(mod, (short) 0, (short) mod.length);
+        Assert.assertNotNull(responseExp);
+        Assert.assertNotNull(responseMod);
+        Assert.assertEquals(0x9000, responseExp.getSW());
+        Assert.assertEquals(0x9000, responseMod.getSW());
+        Assert.assertNotNull(responseExp.getBytes());
+        Assert.assertNotNull(responseMod.getBytes());
+
+        byte[] exp = responseExp.getData();
+        byte[] mod = responseMod.getData();
+
+        RSAPublicKeySpec pubSpec =  new RSAPublicKeySpec(new BigInteger(1, mod), new BigInteger(1, exp));
+        KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+        PublicKey pub = keyFactory.generatePublic(pubSpec);
+
+        byte[] HELLO_WORLD = "Hello world!".getBytes(StandardCharsets.UTF_8);
+        final ResponseAPDU signMessage = connect().transmit(new CommandAPDU(0xB1, 0x44, 0,0, HELLO_WORLD));
+
+        Assert.assertNotNull(signMessage);
+        Assert.assertEquals(0x9000, signMessage.getSW());
+        Assert.assertNotNull(signMessage.getBytes());
+
+        byte[] message = signMessage.getData();
+        Signature sig = Signature.getInstance("SHA256withRSA");
+        sig.initVerify(pub);
+        sig.update(HELLO_WORLD);
+        boolean ver = sig.verify(message);
+        System.out.println(ver);
+
+        Assert.assertTrue(ver);
 
     }
 }
