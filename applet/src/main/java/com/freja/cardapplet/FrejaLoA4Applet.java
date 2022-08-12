@@ -4,7 +4,6 @@ package com.freja.cardapplet;
 import javacard.framework.*;
 import javacard.security.*;
 import javacardx.apdu.ExtendedLength;
-import javacardx.framework.nio.ByteBuffer;
 
 import java.nio.charset.StandardCharsets;
 
@@ -35,13 +34,13 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
     //  code of INS byte in the command APDU header
     public final static byte CMD_HELLO_WORLD = (byte) 0x41;
 
+    public final static byte CMD_SEND_PUBLIC_KEY = (byte) 0x45;
+
     public final static byte CMD_SEND_PUBLIC_KEY_EXP = (byte) 0x42;
 
     public final static byte CMD_SEND_PUBLIC_KEY_MOD = (byte) 0x43;
 
     public final static byte CMD_SIGN = (byte) 0x44;
-
-    private byte[] m_tempBuffer = new byte[260];
 
     private KeyPair m_signingKeyPair;
 
@@ -163,6 +162,9 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
                     helloWorld();
                     //helloWorldSigned();
                     return;
+                case CMD_SEND_PUBLIC_KEY:
+                    fetchPublicKey();
+                    return;
                 case CMD_SEND_PUBLIC_KEY_EXP:
                     fetchPublicKeyExponent();
                     return;
@@ -281,38 +283,26 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
             short lenMod = pub.getModulus(buffer, (short) 0);
             MyUtil.sendDataBuffer(lenMod);
 
-            /*
-            Use apdu methods instead of MyUtil for test to use Extended Length.
-             */
-            //APDU apdu = APDU.getCurrentAPDU();
-            //apdu.setOutgoing();
-            //apdu.setOutgoingLength((short) 260);  //error APDUException.BAD_LENGTH occurs because Extended Length is not working.
-            //apdu.sendBytesLong(m_tempBuffer, (short) 0, (short) 260);
-
         } catch (Exception e) {
             if (e instanceof ISOException) {
                 Error.throwError(((ISOException) e).getReason());
             }
-            System.out.println("error message");
-            System.out.println(e.getMessage());
-            System.out.println(e.toString());
-            e.printStackTrace();
         }
     }
 
+    /**
+     * Fetch public key.
+     */
     public void fetchPublicKey() {
         try {
             byte[] buffer = APDU.getCurrentAPDUBuffer();
 
             RSAPublicKey pub = (RSAPublicKey) m_signingKeyPair.getPublic();
             short exp_length = pub.getExponent(buffer, (short) 2);
-            //change short exp_length to byte array and copy 2 bytes to buffer at offset 0
-            Util.arrayCopy(ByteBuffer.allocateDirect(Short.BYTES).putShort(exp_length).array(), (short) 0, buffer, (short) 0, (short) 2);
-
+            //Deposits the short value as two successive bytes at the specified offset in the byte array.
+            Util.setShort(buffer,(short) 0, exp_length);
             short mod_length = pub.getModulus(buffer, (short) (exp_length+4));
-            //change short mod_length to byte array and copy 2bytes to buffer at offset exp_length+2
-            Util.arrayCopy(ByteBuffer.allocateDirect(Short.BYTES).putShort(mod_length).array(), (short) 0, buffer, (short) (exp_length+2), (short) 2);
-
+            Util.setShort(buffer,(short) (exp_length+2), mod_length);
             MyUtil.sendDataBuffer((short) (exp_length+mod_length+4));
 
         } catch (Exception e) {
@@ -331,20 +321,13 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
             Signature sig = Signature.getInstance(Signature.ALG_RSA_SHA_256_PKCS1, false);
             sig.init(m_signingKeyPair.getPrivate(), Signature.MODE_SIGN);
 
-            short message_length = buffer[ISO7816.OFFSET_LC];
-            short sig_length = sig.sign(buffer, ISO7816.OFFSET_CDATA, message_length, buffer, (short) 0);
-
-            /*
-            Small check if sign was successful.
-             */
-            //Signature sig2 = Signature.getInstance(Signature.ALG_RSA_SHA_256_PKCS1, false);
-            //sig2.init(m_signingKeyPair.getPublic(), Signature.MODE_VERIFY);
-            //boolean ver = sig2.verify(HELLO_WORLD, (short) 0, message_length, buffer, (short) 0, sig_length);
+            APDU apdu = APDU.getCurrentAPDU();
+            apdu.setIncomingAndReceive();
+            short sig_length = sig.sign(buffer, apdu.getOffsetCdata(), apdu.getIncomingLength(), buffer, (short) 0);
 
             MyUtil.sendDataBuffer(sig_length);
         }
         catch (Exception e) {
-
             if (e instanceof ISOException) {
                 Error.throwError(((ISOException) e).getReason());
             }
