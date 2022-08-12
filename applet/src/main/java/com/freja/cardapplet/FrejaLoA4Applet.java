@@ -4,6 +4,7 @@ package com.freja.cardapplet;
 import javacard.framework.*;
 import javacard.security.*;
 import javacardx.apdu.ExtendedLength;
+import javacardx.framework.nio.ByteBuffer;
 
 import java.nio.charset.StandardCharsets;
 
@@ -31,6 +32,7 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
 
     private final static byte[] HELLO_WORLD = "Hello world!".getBytes(StandardCharsets.UTF_8);
 
+    //  code of INS byte in the command APDU header
     public final static byte CMD_HELLO_WORLD = (byte) 0x41;
 
     public final static byte CMD_SEND_PUBLIC_KEY_EXP = (byte) 0x42;
@@ -225,8 +227,6 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
     //            Error.throwError(Error.SW_GET_KEY_NAME_FAILED, Error.MSG_GET_KEY_NAME_FAILED);
             }
         }
-
-
     }
 
     private void helloWorldSigned() {
@@ -300,6 +300,28 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
         }
     }
 
+    public void fetchPublicKey() {
+        try {
+            byte[] buffer = APDU.getCurrentAPDUBuffer();
+
+            RSAPublicKey pub = (RSAPublicKey) m_signingKeyPair.getPublic();
+            short exp_length = pub.getExponent(buffer, (short) 2);
+            //change short exp_length to byte array and copy 2 bytes to buffer at offset 0
+            Util.arrayCopy(ByteBuffer.allocateDirect(Short.BYTES).putShort(exp_length).array(), (short) 0, buffer, (short) 0, (short) 2);
+
+            short mod_length = pub.getModulus(buffer, (short) (exp_length+4));
+            //change short mod_length to byte array and copy 2bytes to buffer at offset exp_length+2
+            Util.arrayCopy(ByteBuffer.allocateDirect(Short.BYTES).putShort(mod_length).array(), (short) 0, buffer, (short) (exp_length+2), (short) 2);
+
+            MyUtil.sendDataBuffer((short) (exp_length+mod_length+4));
+
+        } catch (Exception e) {
+            if (e instanceof ISOException) {
+                Error.throwError(((ISOException) e).getReason());
+            }
+        }
+    }
+
     /**
      * Sign bytes located in APDU buffer with private RSA 2048 key, RSA_SHA_256_PKCS1 algorithm used.
      */
@@ -309,16 +331,17 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
             Signature sig = Signature.getInstance(Signature.ALG_RSA_SHA_256_PKCS1, false);
             sig.init(m_signingKeyPair.getPrivate(), Signature.MODE_SIGN);
 
-            short sigLength = sig.sign(buffer, buffer[ISO7816.OFFSET_CDATA], (short)HELLO_WORLD.length, buffer, (short) 0);
+            short message_length = buffer[ISO7816.OFFSET_LC];
+            short sig_length = sig.sign(buffer, ISO7816.OFFSET_CDATA, message_length, buffer, (short) 0);
 
             /*
             Small check if sign was successful.
              */
             //Signature sig2 = Signature.getInstance(Signature.ALG_RSA_SHA_256_PKCS1, false);
             //sig2.init(m_signingKeyPair.getPublic(), Signature.MODE_VERIFY);
-            //boolean ver = sig2.verify(HELLO_WORLD, (short) 0, (short)HELLO_WORLD.length, buffer, (short) 0, sigLength);
+            //boolean ver = sig2.verify(HELLO_WORLD, (short) 0, message_length, buffer, (short) 0, sig_length);
 
-            MyUtil.sendDataBuffer(sigLength);
+            MyUtil.sendDataBuffer(sig_length);
         }
         catch (Exception e) {
 
@@ -327,5 +350,4 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
             }
         }
     }
-
 }

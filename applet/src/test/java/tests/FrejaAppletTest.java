@@ -1,11 +1,12 @@
 package tests;
 
+import com.freja.cardapplet.FrejaLoA4Applet;
+import cz.muni.fi.crocs.rcard.client.CardManager;
 import cz.muni.fi.crocs.rcard.client.CardType;
 
 import java.math.BigInteger;
 import java.security.KeyFactory;
 import java.security.PublicKey;
-import java.security.interfaces.RSAPublicKey;
 import java.security.spec.RSAPublicKeySpec;
 import java.security.Signature;
 import javacardx.apdu.ExtendedLength;
@@ -61,9 +62,12 @@ public class FrejaAppletTest extends FrejaBaseTest implements ExtendedLength {
      */
     @Test
     public void verifySignatureTest() throws Exception {
-        final ResponseAPDU responseExp = connect().transmit(new CommandAPDU(0xB1, 0x42, 0,0));
-        final CommandAPDU fetchModulus = new CommandAPDU(0xB1, 0x43, 0,0);
-        final ResponseAPDU responseMod = connect().transmit(fetchModulus);
+        CardManager card = connect();
+        final ResponseAPDU responseExp = card.transmit(new CommandAPDU(0xB1, 0x42, 0,0));
+        //final ResponseAPDU responseExp = connect().transmit(new CommandAPDU(0xB1, 0x42, 0,0));
+        final CommandAPDU fetchModulus = new CommandAPDU(0xB1, 0x43, 0,0, new byte[400], 300);
+        //final ResponseAPDU responseMod = connect().transmit(fetchModulus);
+        final ResponseAPDU responseMod = card.transmit(fetchModulus);
 
         /*
         Try to write fetchModulus from scratch instead of using built in constructors of CommandADPU
@@ -86,7 +90,8 @@ public class FrejaAppletTest extends FrejaBaseTest implements ExtendedLength {
         PublicKey pub = keyFactory.generatePublic(pubSpec);
 
         byte[] HELLO_WORLD = "Hello world!".getBytes(StandardCharsets.UTF_8);
-        final ResponseAPDU signMessage = connect().transmit(new CommandAPDU(0xB1, 0x44, 0,0, HELLO_WORLD));
+        //final ResponseAPDU signMessage = connect().transmit(new CommandAPDU(0xB1, 0x44, 0,0, HELLO_WORLD));
+        final ResponseAPDU signMessage = card.transmit(new CommandAPDU(0xB1, 0x44, 0,0, HELLO_WORLD));
 
         Assert.assertNotNull(signMessage);
         Assert.assertEquals(0x9000, signMessage.getSW());
@@ -101,5 +106,7 @@ public class FrejaAppletTest extends FrejaBaseTest implements ExtendedLength {
 
         Assert.assertTrue(ver);
 
+
+        //shortvar = (short) (bytevar & (short) 0xFF);
     }
 }
