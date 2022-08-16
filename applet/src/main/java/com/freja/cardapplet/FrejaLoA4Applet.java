@@ -29,19 +29,6 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
      */
     private final static byte[] VERSION = {(short) 0, (short) 1};
 
-    private final static byte[] HELLO_WORLD = "Hello world!".getBytes(StandardCharsets.UTF_8);
-
-    //  code of INS byte in the command APDU header
-    public final static byte CMD_HELLO_WORLD = (byte) 0x41;
-
-    public final static byte CMD_SEND_PUBLIC_KEY = (byte) 0x45;
-
-    public final static byte CMD_SEND_PUBLIC_KEY_EXP = (byte) 0x42;
-
-    public final static byte CMD_SEND_PUBLIC_KEY_MOD = (byte) 0x43;
-
-    public final static byte CMD_SIGN = (byte) 0x44;
-
     private KeyPair m_signingKeyPair;
 
     /**
@@ -87,9 +74,6 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
 
         m_tempBufferTransient = JCSystem.makeTransientByteArray((short) 256, JCSystem.CLEAR_ON_DESELECT);
         m_appletState = INITIAL_STATE;
-
-        generateRSAKeyPair();
-
     }
 
     /**
@@ -113,6 +97,12 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
      * erased.
      */
     private void clearData() {
+        m_signingKeyPair.getPrivate().clearKey();
+        m_signingKeyPair.getPublic().clearKey();
+        m_signingKeyPair = null;
+        if (JCSystem.isObjectDeletionSupported()) {
+            JCSystem.requestObjectDeletion();
+        }
         m_appletState = INITIAL_STATE;
     }
 
@@ -158,32 +148,19 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
 
         if (m_appletState == INITIAL_STATE) {
             switch (buffer[ISO7816.OFFSET_INS]) {
-                case CMD_HELLO_WORLD:
-                    helloWorld();
-                    //helloWorldSigned();
-                    return;
-                case CMD_SEND_PUBLIC_KEY:
-                    fetchPublicKey();
-                    return;
-                case CMD_SEND_PUBLIC_KEY_EXP:
-                    fetchPublicKeyExponent();
-                    return;
-                case CMD_SEND_PUBLIC_KEY_MOD:
-                    fetchPublicKeyModulus();
-                    return;
-                case CMD_SIGN:
-                    signMessage();
+                case CommandCodes.CMD_GEN_KEY_PAIR:
+                    generateRSAKeyPair();
+                    m_appletState = ACTIVE_STATE;
                     return;
                 default:
-                    Error.throwError(Error.SW_GET_HELLO_WORLD_FAILED, Error.MSG_GET_HELLO_WORLD_FAILED);
+                    Error.throwError(ISO7816.SW_COMMAND_NOT_ALLOWED, Error.MSG_UNSUPPORTED_IN_INITIAL_STATE);
             }
-
         }
 
         if (m_appletState == LOCKED_STATE) {
             switch (buffer[ISO7816.OFFSET_INS]) {
                 default:
-                    Error.throwError(Error.SW_GET_HELLO_WORLD_FAILED, Error.MSG_GET_HELLO_WORLD_FAILED);
+                    Error.throwError(Error.SW_APPLET_LOCKED, Error.MSG_APPLET_LOCKED);
 //                    Error.throwErrorWithRND(Error.SW_PIN_IS_LOCKED, Pin.getLockedPINMsg(m_offlinePin, m_onlinePin));
             }
 
@@ -192,6 +169,14 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
         if (m_appletState == ACTIVE_STATE) {
             // commands that don't need secure chanel
             switch (buffer[ISO7816.OFFSET_INS]) {
+                case CommandCodes.CMD_FETCH_PUBLIC_KEY:
+                    fetchPublicKey();
+                    return;
+                case CommandCodes.CMD_SIGN:
+                    signMessage();
+                    return;
+                default:
+                    Error.throwError(ISO7816.SW_COMMAND_NOT_ALLOWED, Error.MSG_UNSUPPORTED_IN_ACTIVE_STATE);
             }
 
             short dataLength;
@@ -203,89 +188,6 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
             switch (buffer[ISO7816.OFFSET_INS]) {
                 default:
                     Error.throwError(ISO7816.SW_INS_NOT_SUPPORTED);
-            }
-        }
-    }
-
-    private void helloWorld() {
-
-        try {
-            // APDU command
-            // 0xB1, 0x41
-
-            // pack command for sending into buffer
-            byte[] buffer = APDU.getCurrentAPDUBuffer();
-
-            // puts list into tempBuffer
-            Util.arrayCopy(HELLO_WORLD, (short) 0, buffer, (short) 0, (short)HELLO_WORLD.length);
-            MyUtil.sendDataBuffer((short)HELLO_WORLD.length);
-
-        } catch (Exception e) {
-
-            if (e instanceof ISOException) {
-                Error.throwError(((ISOException) e).getReason());
-            } else {
-                // TODO: Check whether this needs to be fixed later
-    //            Error.throwError(Error.SW_GET_KEY_NAME_FAILED, Error.MSG_GET_KEY_NAME_FAILED);
-            }
-        }
-    }
-
-    private void helloWorldSigned() {
-        try {
-
-            byte[] buffer = APDU.getCurrentAPDUBuffer();
-
-            // sign buffer with private key, Signature.ALG_RSA_SHA_256_PKCS1 used.
-            Signature sig = Signature.getInstance(Signature.ALG_RSA_SHA_256_PKCS1, false);
-            sig.init(m_signingKeyPair.getPrivate(), Signature.MODE_SIGN);
-
-            short sigLength = sig.sign(HELLO_WORLD, (short) 0, (short)HELLO_WORLD.length, buffer, (short) 0);
-
-            sig.init(m_signingKeyPair.getPublic(), Signature.MODE_VERIFY);
-            boolean ver = sig.verify(HELLO_WORLD, (short) 0, (short)HELLO_WORLD.length, buffer, (short) 0, sigLength);
-            System.out.println(ver);
-            MyUtil.sendDataBuffer(sigLength);
-            }
-        catch (Exception e) {
-
-            if (e instanceof ISOException) {
-                Error.throwError(((ISOException) e).getReason());
-            }
-        }
-    }
-    /**
-     * Fetch public 2048 RSA key exponent.
-     */
-    private void fetchPublicKeyExponent() {
-        try {
-            byte[] buffer = APDU.getCurrentAPDUBuffer();
-
-            RSAPublicKey pub = (RSAPublicKey) m_signingKeyPair.getPublic();
-            short lenExp = pub.getExponent(buffer, (short) 0);
-            MyUtil.sendDataBuffer(lenExp);
-
-        } catch (Exception e) {
-            if (e instanceof ISOException) {
-                Error.throwError(((ISOException) e).getReason());
-            }
-        }
-    }
-
-    /**
-     * Fetch public 2048 RSA key modulus.
-     */
-    private void fetchPublicKeyModulus() {
-        try {
-            byte[] buffer = APDU.getCurrentAPDUBuffer();
-
-            RSAPublicKey pub = (RSAPublicKey) m_signingKeyPair.getPublic();
-            short lenMod = pub.getModulus(buffer, (short) 0);
-            MyUtil.sendDataBuffer(lenMod);
-
-        } catch (Exception e) {
-            if (e instanceof ISOException) {
-                Error.throwError(((ISOException) e).getReason());
             }
         }
     }

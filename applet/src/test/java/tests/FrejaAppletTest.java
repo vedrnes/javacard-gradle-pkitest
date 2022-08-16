@@ -1,5 +1,6 @@
 package tests;
 
+import com.freja.cardapplet.Error;
 import com.freja.cardapplet.FrejaLoA4Applet;
 import cz.muni.fi.crocs.rcard.client.CardManager;
 import cz.muni.fi.crocs.rcard.client.CardType;
@@ -12,6 +13,7 @@ import java.security.spec.RSAPublicKeySpec;
 import java.security.Signature;
 
 import cz.muni.fi.crocs.rcard.client.Util;
+import javacard.framework.ISO7816;
 import javacardx.apdu.ExtendedLength;
 import org.junit.Assert;
 import org.junit.jupiter.api.*;
@@ -19,7 +21,8 @@ import org.junit.jupiter.api.*;
 import javax.smartcardio.CommandAPDU;
 import javax.smartcardio.ResponseAPDU;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
+
+import com.freja.cardapplet.CommandCodes;
 
 /**
  * Example test class for the applet
@@ -28,7 +31,7 @@ import java.util.Arrays;
  * @author xsvenda, Dusan Klinec (ph4r05)
  */
 public class FrejaAppletTest extends FrejaBaseTest implements ExtendedLength {
-
+    private CardManager m_card;
     public FrejaAppletTest() {
         // Change card type here if you want to use physical card
         setCardType(CardType.JCARDSIMLOCAL);
@@ -44,19 +47,31 @@ public class FrejaAppletTest extends FrejaBaseTest implements ExtendedLength {
 
     @BeforeEach
     public void setUpMethod() throws Exception {
+        m_card = connect();
     }
 
     @AfterEach
     public void tearDownMethod() throws Exception {
     }
 
-    // Example test
+    // Card in initial state, command does not exist
     @Test
-    public void hello() throws Exception {
-        final CommandAPDU cmd = new CommandAPDU(0xB1, 0x41, 0, 0);
-        final ResponseAPDU responseAPDU = connect().transmit(cmd);
+    public void nonExistentCommand() throws Exception {
+        final CommandAPDU cmd = new CommandAPDU(0xB1, CommandCodes.CMD_BAD, 0, 0);
+        final ResponseAPDU responseAPDU = m_card.transmit(cmd);
         Assert.assertNotNull(responseAPDU);
-        Assert.assertEquals(0x9000, responseAPDU.getSW());
+        Assert.assertEquals(ISO7816.SW_COMMAND_NOT_ALLOWED, responseAPDU.getSW());
+        Assert.assertNotNull(responseAPDU.getBytes());
+    }
+
+    // Card in active state, command not supported in active state
+    @Test
+    public void badCommandForActiveState() throws Exception {
+        // Bring applet in active state
+        final CommandAPDU cmd = new CommandAPDU(0xB1, CommandCodes.CMD_GEN_KEY_PAIR, 0, 0);
+        final ResponseAPDU responseAPDU = m_card.transmit(cmd);
+        Assert.assertNotNull(responseAPDU);
+        Assert.assertEquals(ISO7816.SW_NO_ERROR, (short)responseAPDU.getSW());
         Assert.assertNotNull(responseAPDU.getBytes());
     }
 
@@ -67,15 +82,19 @@ public class FrejaAppletTest extends FrejaBaseTest implements ExtendedLength {
      */
     @Test
     public void verifySignatureTest() throws Exception {
-        CardManager card = connect();
-        //first APDU: fetch public key
-        final ResponseAPDU fetchPublicKey = card.transmit(new CommandAPDU(0xB1, 0x45, 0,0, new byte[400], 300));
-        Assert.assertNotNull(fetchPublicKey);
-        Assert.assertEquals(0x9000, fetchPublicKey.getSW());
-        Assert.assertNotNull(fetchPublicKey.getBytes());
+        // 1. Generate key pair
+        final ResponseAPDU generateKeyPairAPDU = m_card.transmit(new CommandAPDU(0xB1, CommandCodes.CMD_GEN_KEY_PAIR, 0, 0));
+        Assert.assertNotNull(generateKeyPairAPDU);
+        Assert.assertEquals(ISO7816.SW_NO_ERROR, (short)generateKeyPairAPDU.getSW());
+
+        // 2: fetch public key
+        final ResponseAPDU fetchPublicKeyAPDU = m_card.transmit(new CommandAPDU(0xB1, CommandCodes.CMD_FETCH_PUBLIC_KEY, 0,0, new byte[400], 300));
+        Assert.assertNotNull(fetchPublicKeyAPDU);
+        Assert.assertEquals(ISO7816.SW_NO_ERROR, (short)fetchPublicKeyAPDU.getSW());
+        Assert.assertNotNull(fetchPublicKeyAPDU.getBytes());
 
         //extract exponent and modulus
-        byte[] publicKeyData = fetchPublicKey.getData();
+        byte[] publicKeyData = fetchPublicKeyAPDU.getData();
         short exp_length = ByteBuffer.wrap(publicKeyData,0,2).getShort();
         short mod_length = ByteBuffer.wrap(publicKeyData,exp_length+2,2).getShort();
         byte[] exp = new byte[exp_length];
@@ -90,13 +109,13 @@ public class FrejaAppletTest extends FrejaBaseTest implements ExtendedLength {
 
         //second APDU: send message to be signed
         byte[] HELLO_WORLD = "Hello world!".getBytes(StandardCharsets.UTF_8);
-        final ResponseAPDU signMessage = card.transmit(new CommandAPDU(0xB1, 0x44, 0,0, HELLO_WORLD));
-        Assert.assertNotNull(signMessage);
-        Assert.assertEquals(0x9000, signMessage.getSW());
-        Assert.assertNotNull(signMessage.getBytes());
+        final ResponseAPDU signMessageAPDU = m_card.transmit(new CommandAPDU(0xB1, CommandCodes.CMD_SIGN, 0,0, HELLO_WORLD));
+        Assert.assertNotNull(signMessageAPDU);
+        Assert.assertEquals(ISO7816.SW_NO_ERROR, (short)signMessageAPDU.getSW());
+        Assert.assertNotNull(signMessageAPDU.getBytes());
 
         //verify message with public key
-        byte[] message = signMessage.getData();
+        byte[] message = signMessageAPDU.getData();
         Signature sig = Signature.getInstance("SHA256withRSA");
         sig.initVerify(pub);
         sig.update(HELLO_WORLD);
@@ -107,13 +126,13 @@ public class FrejaAppletTest extends FrejaBaseTest implements ExtendedLength {
                 "advantage of extended APDU functionality, as defined in the ISO 7816 specification. Extended APDU " +
                 "allows large amounts of data to be sent to the card, processed appropriately, and sent back to the " +
                 "terminal, in a more efficient way.").getBytes(StandardCharsets.UTF_8);
-        final ResponseAPDU signMessageLong = card.transmit(new CommandAPDU(0xB1, 0x44, 0,0, TEST_LONG, 300));
-        Assert.assertNotNull(signMessageLong);
-        Assert.assertEquals(0x9000, signMessageLong.getSW());
-        Assert.assertNotNull(signMessageLong.getBytes());
+        final ResponseAPDU signMessageLongAPDU = m_card.transmit(new CommandAPDU(0xB1, 0x44, 0,0, TEST_LONG, 300));
+        Assert.assertNotNull(signMessageLongAPDU);
+        Assert.assertEquals(ISO7816.SW_NO_ERROR, (short)signMessageLongAPDU.getSW());
+        Assert.assertNotNull(signMessageLongAPDU.getBytes());
 
         //verify message 2
-        byte[] messageLong = signMessageLong.getData();
+        byte[] messageLong = signMessageLongAPDU.getData();
         sig.update(TEST_LONG);
         boolean ver2 = sig.verify(messageLong);
 
