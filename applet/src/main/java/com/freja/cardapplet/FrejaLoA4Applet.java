@@ -1,11 +1,19 @@
 package com.freja.cardapplet;
 
-//import javaCardKeyHolder.*;
-import javacard.framework.*;
-import javacard.security.*;
+import javacard.framework.APDU;
+import javacard.framework.Applet;
+import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
+import javacard.framework.JCSystem;
+import javacard.framework.Util;
+import javacard.security.KeyBuilder;
+import javacard.security.KeyPair;
+import javacard.security.RSAPublicKey;
+import javacard.security.Signature;
 import javacardx.apdu.ExtendedLength;
 
-import java.nio.charset.StandardCharsets;
+
+// implement MultiSelectable?
 
 public class FrejaLoA4Applet extends Applet implements ExtendedLength {
     /*  states of applet */
@@ -22,7 +30,7 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
      * m_tempBufferTransient contains decrypted data from
      * m_receivedDataTransient used for temporary storing data
      */
-    private byte[] m_tempBufferTransient;
+    private final byte[] m_tempBufferTransient;
 
     /**
      * major_version.minor_version of applet is held in this array.
@@ -40,7 +48,7 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
      * @param bLength the length in bytes of the parameter data in bArray
      */
     public static void install(byte[] bArray, short bOffset, byte bLength) {
-        byte instanceLength = (byte) bArray[bOffset];
+        byte instanceLength = bArray[bOffset];
         (new FrejaLoA4Applet(bArray, bOffset)).register(bArray, (short) (bOffset + 1), instanceLength);
     }
 
@@ -59,7 +67,7 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
         short cdataIndex;
         boolean simulation;
 
-        /**
+        /*
          * Determine if context of execution is emulator by trying to create
          * AES-256 key (it's not supported by emulator).
          */
@@ -182,9 +190,7 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
             short dataLength;
 
 
-            /**
-             * commands that require secure channel.
-             */
+            // commands that require secure channel
             switch (buffer[ISO7816.OFFSET_INS]) {
                 default:
                     Error.throwError(ISO7816.SW_INS_NOT_SUPPORTED);
