@@ -116,7 +116,7 @@ public class FrejaAppletTest extends FrejaBaseTest implements ExtendedLength {
 
         //verify message with public key
         byte[] message = signMessageAPDU.getData();
-        Signature sig = Signature.getInstance("SHA256withRSA");
+        Signature sig = Signature.getInstance("SHA1withRSA");
         sig.initVerify(pub);
         sig.update(HELLO_WORLD);
         boolean ver = sig.verify(message);

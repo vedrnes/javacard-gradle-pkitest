@@ -226,7 +226,7 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
     private void signMessage() {
         try {
             byte[] buffer = APDU.getCurrentAPDUBuffer();
-            Signature sig = Signature.getInstance(Signature.ALG_RSA_SHA_256_PKCS1, false);
+            Signature sig = Signature.getInstance(Signature.ALG_RSA_SHA_PKCS1, false);
             sig.init(m_signingKeyPair.getPrivate(), Signature.MODE_SIGN);
 
             APDU apdu = APDU.getCurrentAPDU();

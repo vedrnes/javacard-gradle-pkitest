@@ -18,6 +18,7 @@ buildscript {
 apply plugin: 'com.klinec.gradle.javacard'
 apply plugin: 'idea'
 sourceCompatibility = 1.8
+targetCompatibility = 1.8
 
 // Common settings, definitions
 final def rootPath = rootDir.absolutePath
@@ -104,7 +105,7 @@ final def JC310b43 = libsSdk + '/jc310b43_kit'
 //
 // JC310b43 supports building also for lower versions (cap.targetsdk).
 // If another SDK is selected, please comment the cap.targetsdk setting.
-final def JC_SELECTED = JC310b43
+final def JC_SELECTED = JC303
 
 javacard {
 
@@ -121,14 +122,14 @@ javacard {
         cap {
             packageName 'com.freja.cardapplet'
             version '0.1'
-            aid 'C5:95:7D:86:36'
+            aid 'A0:00:00:06:17:00:A2:2E:E4:4F:00:01'//'C5:95:7D:86:36'
             output 'frejaLoa4applet.cap'
 
             // JC310b43 supports compilation targeting for lower API versions.
             // Here you can specify path to the SDK you want to use.
             // Only JC304 and higher are supported for targeting.
             // If JC310b43 is not used, targetsdk cannot be set.
-            targetsdk JC304
+            targetsdk JC303
 
             // Override java bytecode version if needed.
             // javaversion '1.7'
@@ -136,13 +137,13 @@ javacard {
             //noinspection GroovyAssignabilityCheck
             applet {
                 className 'com.freja.cardapplet.FrejaLoA4Applet'
-                aid 'C5:95:7D:86:36:9D'
+                aid 'A0:00:00:06:17:00:A2:2E:E4:4F:00:01:01'//'C5:95:7D:86:36:9D'
             }
 
             //noinspection GroovyAssignabilityCheck
-            // dependencies {
-            //     remote 'com.klinec:globalplatform:2.1.1'
-            // }
+             //dependencies {
+             //    remote 'com.klinec:globalplatform:2.1.1'
+             //}
         }
     }
 }
