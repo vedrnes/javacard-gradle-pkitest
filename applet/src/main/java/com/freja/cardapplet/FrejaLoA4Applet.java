@@ -16,6 +16,73 @@ import javacardx.apdu.ExtendedLength;
 // implement MultiSelectable?
 
 public class FrejaLoA4Applet extends Applet implements ExtendedLength {
+
+    /// The default value for which is returned
+    /// when the applet is selected (this represents the FCI parameter as per ISO-7816)
+    protected static final byte[] TEMPLATE_FCI =
+            new byte[] {
+                    // 2 + 13 bytes - Application identifier of application (TAG '4F')
+                    (byte) 0x4F,
+                    (byte) 0x0D,
+                    (byte) 0xA0,
+                    (byte) 0x00,
+                    (byte) 0x00,
+                    (byte) 0x06,
+                    (byte) 0x17,
+                    (byte) 0x00,
+                    (byte) 0xA2,
+                    (byte) 0x2E,
+                    (byte) 0xE4,
+                    (byte) 0x4F,
+                    (byte) 0x00,
+                    (byte) 0x01,
+                    (byte) 0x01,
+
+                    // 2 + 09 bytes - Application label
+                    // FrejaLoA4
+                    (byte) 0x50,
+                    (byte) 0x09,
+                    'F',
+                    'r',
+                    'e',
+                    'j',
+                    'a',
+                    'L',
+                    'o',
+                    'A',
+                    '4',
+
+                    // 3 + 18 bytes - Uniform resource locator
+                    // https://www.frejaeid.com
+                    (byte) 0x5F,
+                    (byte) 0x50,
+                    (byte) 0x18,
+                    'h',
+                    't',
+                    't',
+                    'p',
+                    's',
+                    ':',
+                    '/',
+                    '/',
+                    'w',
+                    'w',
+                    'w',
+                    '.',
+                    'f',
+                    'r',
+                    'e',
+                    'j',
+                    'a',
+                    'e',
+                    'i',
+                    'd',
+                    '.',
+                    'c',
+                    'o',
+                    'm'
+            };
+
     /*  states of applet */
     public final static byte INITIAL_STATE = (byte) 0xF0;
     public final static byte ACTIVE_STATE = (byte) 0xF1;
@@ -134,6 +201,19 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
     }
 
     /**
+     * Specific processing of selecting of this applet.
+     * @param buffer
+     * @param offset
+     * @return
+     */
+    public short selectFrejaLoa4(byte[] buffer, short offset) {
+        Util.arrayCopyNonAtomic(
+                TEMPLATE_FCI, (short)0, buffer, offset, (short) TEMPLATE_FCI.length);
+
+        return (short) TEMPLATE_FCI.length;
+    }
+
+    /**
      * Method called by JCRE when APDU command is received.
      *
      * @param apdu object representing received APDU command (carries a byte
@@ -143,8 +223,10 @@ public class FrejaLoA4Applet extends Applet implements ExtendedLength {
     public void process(APDU apdu) {
         byte[] buffer = apdu.getBuffer();
 
-        // return if this is command for selecting applet
-        if ((buffer[ISO7816.OFFSET_CLA] == 0) && (buffer[ISO7816.OFFSET_INS] == (byte) (0xA4))) {
+        // return FCI if this is command for selecting applet
+        if (selectingApplet()) {
+            short lengthToTransmit = selectFrejaLoa4(buffer, (short)0);
+            MyUtil.sendDataBuffer(lengthToTransmit);
             return;
         }
 
